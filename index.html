@@ -25,11 +25,20 @@
   .opt a { color: #cfd; font-size: 12px; text-decoration: none; padding: 4px 10px; border-radius: 99px; border: 1px solid #ffffff30; }
   .opt a.on { background: #ffffff22; }
   @media (max-width: 900px) { body { flex-direction: column; align-items: center; overflow: auto; } aside { flex-basis: auto; width: 100%; max-width: 480px; } }
+  #picker { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    text-align: center; padding: 24px; background: #000c; z-index: 50; }
+  #picker.show { display: flex; }
+  #picker button { padding: 10px 22px; border-radius: 99px; border: 0; background: #e8384f; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+  #picker p { margin: 0; color: #bbc; font-size: 13px; }
+  #stage { position: relative; }
   #game canvas { image-rendering: auto; }
 </style>
 </head>
 <body>
-<div id="stage"><div id="game"></div></div>
+<div id="stage"><div id="game"></div>
+  <div id="picker"><h2 style="margin:0">ROM 파일 선택</h2>
+    <p>본인이 가진 포켓몬 하트골드 .nds 파일을 선택하세요.<br>파일은 서버로 전송되지 않고 이 브라우저에만 보관됩니다.</p>
+    <button id="pick">.nds 파일 선택</button><input id="file" type="file" accept=".nds" hidden></div></div>
 <aside>
   <h2>조작키</h2>
   <div class="row"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>이동</span></div>
@@ -61,7 +70,6 @@
 
   EJS_player = "#game";
   EJS_core = core;
-  EJS_gameUrl = "game.nds";
   EJS_gameName = "Pokemon HeartGold";
   EJS_pathtodata = "data/";
   EJS_DEBUG_XX = true;                // 비압축 소스 사용
@@ -108,6 +116,29 @@
     1: {}, 2: {}, 3: {},
   };
 </script>
-<script src="data/loader.js"></script>
+<script>
+  // ROM: 1) 같은 폴더의 game.nds  2) 브라우저에 저장된 ROM  3) 파일 선택
+  const DB = "hg-rom", picker = document.getElementById("picker");
+  const idb = () => new Promise((ok, no) => { const r = indexedDB.open(DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("rom"); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+  const idbGet = async () => { try { const d = await idb(); return await new Promise(ok => { const r = d.transaction("rom").objectStore("rom").get("rom"); r.onsuccess = () => ok(r.result); r.onerror = () => ok(null); }); } catch { return null; } };
+  const idbPut = async blob => { try { const d = await idb(); d.transaction("rom", "readwrite").objectStore("rom").put(blob, "rom"); } catch {} };
+  function boot(blob) {
+    picker.classList.remove("show");
+    EJS_gameUrl = URL.createObjectURL(blob);
+    const sc = document.createElement("script"); sc.src = "data/loader.js"; document.body.appendChild(sc);
+  }
+  (async () => {
+    try { const r = await fetch("game.nds", { method: "HEAD" });
+      if (r.ok && !(r.headers.get("content-type") || "").includes("text/html")) { EJS_gameUrl = "game.nds"; picker.classList.remove("show");
+        const sc = document.createElement("script"); sc.src = "data/loader.js"; document.body.appendChild(sc); return; } } catch {}
+    const saved = await idbGet();
+    if (saved) return boot(saved);
+    picker.classList.add("show");
+  })();
+  document.getElementById("pick").onclick = () => document.getElementById("file").click();
+  document.getElementById("file").onchange = async e => { const f = e.target.files[0]; if (!f) return;
+    const blob = new Blob([await f.arrayBuffer()], { type: "application/octet-stream" }); idbPut(blob); boot(blob); };
+</script>
 </body>
 </html>

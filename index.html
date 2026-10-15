@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>포켓몬스터 하트골드</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(circle at 50% 0%, #2a1f3d, #0c0a14 70%); color: #eee;
+    font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif; }
+  body { display: flex; gap: 20px; padding: 16px; align-items: stretch; justify-content: center; }
+  #stage { flex: 1 1 auto; min-width: 0; max-width: calc((100vh - 32px) * 0.75); aspect-ratio: 256 / 384;
+    border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 10px 50px #000a, 0 0 0 1px #ffffff18; align-self: center; width: 100%; }
+  #game { width: 100%; height: 100%; }
+  aside { flex: 0 0 260px; align-self: center; background: #ffffff0d; border: 1px solid #ffffff1a; border-radius: 14px; padding: 16px 18px; font-size: 14px; line-height: 1.7; }
+  aside h2 { margin: 0 0 8px; font-size: 16px; }
+  aside h3 { margin: 14px 0 4px; font-size: 12px; letter-spacing: .08em; color: #aab; text-transform: uppercase; }
+  kbd { display: inline-block; min-width: 26px; padding: 0 7px; text-align: center; border-radius: 6px; background: #ffffff1f;
+    border: 1px solid #ffffff30; border-bottom-width: 2px; font: 600 12px/22px ui-monospace, monospace; margin-right: 2px; }
+  .row { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .row span:last-child { color: #bbc; text-align: right; }
+  .note { margin-top: 14px; font-size: 12px; color: #99a; }
+  .opt { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .opt a { color: #cfd; font-size: 12px; text-decoration: none; padding: 4px 10px; border-radius: 99px; border: 1px solid #ffffff30; }
+  .opt a.on { background: #ffffff22; }
+  @media (max-width: 900px) { body { flex-direction: column; align-items: center; overflow: auto; } aside { flex-basis: auto; width: 100%; max-width: 480px; } }
+  #game canvas { image-rendering: auto; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="game"></div></div>
+<aside>
+  <h2>조작키</h2>
+  <div class="row"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>이동</span></div>
+  <div class="row"><span><kbd>Shift</kbd></span><span>B 달리기 / 취소</span></div>
+  <div class="row"><span><kbd>J</kbd></span><span>A 확인 / 대화</span></div>
+  <div class="row"><span><kbd>L</kbd></span><span>X 메뉴</span></div>
+  <div class="row"><span><kbd>I</kbd></span><span>Y 등록 아이템</span></div>
+  <div class="row"><span><kbd>Enter</kbd></span><span>START</span></div>
+  <div class="row"><span><kbd>Backspace</kbd></span><span>SELECT</span></div>
+  <div class="row"><span><kbd>Q</kbd><kbd>E</kbd></span><span>L / R</span></div>
+  <h3>터치 스크린</h3>
+  <div class="row"><span>마우스 클릭/드래그</span><span>아래 화면 터치</span></div>
+  <h3>저장</h3>
+  <div class="row"><span><kbd>F5</kbd></span><span>퀵 세이브</span></div>
+  <div class="row"><span><kbd>F9</kbd></span><span>퀵 로드</span></div>
+  <div class="row"><span><kbd>Space</kbd></span><span>빨리감기(누르는 동안)</span></div>
+  <p class="note">게임 내 저장(리포트)은 브라우저에 자동 보관됩니다. 키는 톱니바퀴 메뉴 → Control Settings에서 바꿀 수 있어요.</p>
+  <div class="opt" id="cores"></div>
+</aside>
+
+<script>
+  const q = new URLSearchParams(location.search);
+  const core = q.get("core") === "melonds" ? "melonds" : "desmume";   // desmume: 고해상도 렌더 지원
+  const res = q.get("res") || "1024x768";                               // 256x192 = 원본, 1024x768 = 4배
+
+  document.getElementById("cores").innerHTML =
+    `<a href="?core=desmume" class="${core==="desmume"?"on":""}">DeSmuME (고화질)</a>` +
+    `<a href="?core=melonds" class="${core==="melonds"?"on":""}">melonDS (정확도)</a>`;
+
+  EJS_player = "#game";
+  EJS_core = core;
+  EJS_gameUrl = "game.nds";
+  EJS_gameName = "Pokemon HeartGold";
+  EJS_pathtodata = "data/";
+  EJS_DEBUG_XX = true;                // 비압축 소스 사용
+  EJS_color = "#e8384f";
+  EJS_startOnLoaded = false;
+  EJS_threads = false;
+  EJS_volume = 0.6;
+  EJS_defaultOptions = {
+    "shader": "none",
+    // DeSmuME 코어 옵션
+    "desmume_internal_resolution": res,
+    "desmume_gfx_texture_smoothing": "enabled",
+    "desmume_gfx_multisampling": "4",
+    "desmume_gfx_edgemark": "enabled",
+    "desmume_gfx_linehack": "enabled",
+    "desmume_screens_layout": "top/bottom",
+    "desmume_pointer_type": "touch",
+    "desmume_frameskip": "0",
+    "desmume_num_cores": "1",
+    // melonDS 코어 옵션
+    "melonds_screen_layout": "Top/Bottom",
+    "melonds_threaded_renderer": "enabled",
+  };
+  // 버튼 번호: 0=B 1=Y 2=SELECT 3=START 4~7=상하좌우 8=A 9=X 10=L 11=R 24=퀵세이브 25=퀵로드 27=빨리감기
+  EJS_defaultControls = {
+    0: {
+      0:  { value: "shift",     value2: "BUTTON_2" },  // 달리기 (B)
+      1:  { value: "i",         value2: "BUTTON_4" },  // Y
+      2:  { value: "backspace", value2: "SELECT" },
+      3:  { value: "enter",     value2: "START" },
+      4:  { value: "w",         value2: "DPAD_UP" },
+      5:  { value: "s",         value2: "DPAD_DOWN" },
+      6:  { value: "a",         value2: "DPAD_LEFT" },
+      7:  { value: "d",         value2: "DPAD_RIGHT" },
+      8:  { value: "j",         value2: "BUTTON_1" },   // A
+      9:  { value: "l",         value2: "BUTTON_3" },   // X
+      10: { value: "q",         value2: "LEFT_TOP_SHOULDER" },
+      11: { value: "e",         value2: "RIGHT_TOP_SHOULDER" },
+      24: { value: "f5" },
+      25: { value: "f9" },
+      26: { value: "f6" },
+      27: { value: "space" },
+    },
+    1: {}, 2: {}, 3: {},
+  };
+</script>
+<script src="data/loader.js"></script>
+</body>
+</html>
